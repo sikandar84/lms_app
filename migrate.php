@@ -8,21 +8,9 @@ try {
     $pdo = new PDO("mysql:host=$host", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+    // Create DB
     $pdo->exec("CREATE DATABASE IF NOT EXISTS $dbname");
     $pdo->exec("USE $dbname");
-
-    // Drop tables (in reverse dependency order)
-    $tables = [
-        'submitted_assessments', 'assessments',
-        'course_enrollments', 'local_course_enrollments',
-        'visa_status', 'invoices', 'offer_letters',
-        'documents', 'applications', 'courses',
-        'programs', 'universities', 'notifications',
-        'local_courses', 'users'
-    ];
-    foreach ($tables as $table) {
-        $pdo->exec("DROP TABLE IF EXISTS $table");
-    }
 
     // USERS
     $pdo->exec("
@@ -61,7 +49,7 @@ try {
         );
     ");
 
-    // COURSES (linked to programs)
+    // COURSES
     $pdo->exec("
         CREATE TABLE courses (
             course_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -94,7 +82,7 @@ try {
         );
     ");
 
-    // DOCUMENTS (generic uploads)
+    // DOCUMENTS
     $pdo->exec("
         CREATE TABLE documents (
             document_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -119,7 +107,7 @@ try {
         );
     ");
 
-    // INVOICES (for Finance Dashboard)
+    // INVOICES
     $pdo->exec("
         CREATE TABLE invoices (
             invoice_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -145,7 +133,7 @@ try {
         );
     ");
 
-    // FOREIGN COURSE ENROLLMENTS
+    // COURSE ENROLLMENTS (Foreign Programs)
     $pdo->exec("
         CREATE TABLE course_enrollments (
             enrollment_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -157,7 +145,7 @@ try {
         );
     ");
 
-    // ASSESSMENTS (admin assigned)
+    // ASSESSMENTS
     $pdo->exec("
         CREATE TABLE assessments (
             assessment_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -169,7 +157,7 @@ try {
         );
     ");
 
-    // STUDENT SUBMITTED ASSESSMENTS
+    // SUBMITTED ASSESSMENTS
     $pdo->exec("
         CREATE TABLE submitted_assessments (
             submission_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -182,7 +170,7 @@ try {
         );
     ");
 
-    // NOTIFICATIONS (Admin -> student or system generated)
+    // NOTIFICATIONS
     $pdo->exec("
         CREATE TABLE notifications (
             notification_id INT AUTO_INCREMENT PRIMARY KEY,

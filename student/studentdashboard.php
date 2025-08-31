@@ -88,7 +88,7 @@ $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <a href="offer_letters.php">Offer Letters</a>
       <a href="enroll_local.php">Enroll Local Courses</a>
       <a href="assessments.php">Assessments</a>
-      <a href="submit_assessment.php">Submit Assessment</a>
+      <a href="assessments.php">Submit Assessment</a>
       <a href="notifications.php">Notifications</a>
       <a href="change_credentials.php" class="change-btn">Change Email/Password</a>
       <a href="../auth/login.php" class="text-danger">Logout</a>

@@ -79,8 +79,9 @@ try {
       <a href="manage_applications.php">Applications</a>
       <a href="manage_visa.php">Manage Visa</a>
       <a href="manage_offer_letters.php">Offer Letters</a>
-      <a href="manage_notifications.php">Notifications</a>
-      <a href="manage_invoices.php">Invoices</a>
+      <a href="manage_assessments.php">Assessments creation</a>
+      <a href="manage_local_assessments.php">Assessments creation</a>
+      <a href="manage_invoicesadmin.php">Invoices</a>
       <a href="register_finance.php">Register Finance</a>
       <a href="change_credentials.php" class="text-success ms-3">Change Credentials</a>
       <a href="logout.php" class="text-danger ms-3">Logout</a>

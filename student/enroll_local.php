@@ -31,7 +31,10 @@ $enrolled = $check->fetch(PDO::FETCH_ASSOC);
 // ✅ Handle enrollment
 if ($can_enroll && isset($_POST['enroll']) && !$enrolled) {
     $local_course_id = intval($_POST['local_course_id']);
-    $stmt = $pdo->prepare("INSERT INTO local_course_enrollments (student_id, local_course_id) VALUES (?, ?)");
+    $stmt = $pdo->prepare("
+        INSERT INTO local_course_enrollments (student_id, local_course_id, enrolled_at) 
+        VALUES (?, ?, NOW())
+    ");
     if ($stmt->execute([$student_id, $local_course_id])) {
         header("Location: enroll_local.php?msg=success");
         exit();
@@ -43,7 +46,6 @@ if ($can_enroll && isset($_POST['enroll']) && !$enrolled) {
 // ✅ Fetch all local courses
 $courses = $pdo->query("SELECT * FROM local_courses ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,7 +68,9 @@ $courses = $pdo->query("SELECT * FROM local_courses ORDER BY created_at DESC")->
     </div>
   <?php elseif ($enrolled): ?>
     <div class="alert alert-success">
-      ✅ You are already enrolled in: <strong><?= htmlspecialchars($enrolled['course_name']) ?></strong>
+      ✅ You are already enrolled in: 
+      <strong><?= htmlspecialchars($enrolled['course_name']) ?></strong><br>
+      📅 Enrolled at: <strong><?= htmlspecialchars($enrolled['enrolled_at']) ?></strong>
     </div>
   <?php else: ?>
     <?php if (isset($_GET['msg']) && $_GET['msg'] === 'success'): ?>

@@ -3,195 +3,163 @@ session_start();
 require_once("../config/db.php");
 require_once("../includes/auth.php");
 
-// Redirect if not student
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'student') {
+// ✅ Student-only access
+if (!isset($_SESSION['role']) || strtolower($_SESSION['role']) !== 'student') {
     header("Location: ../auth/login.php");
     exit();
 }
 
-$student_id = $_SESSION['id'];
-$success = "";
-$error = "";
+$student_id = $_SESSION['id'] ?? null; 
+$full_name  = $_SESSION['full_name'] ?? "Student";
 
-// Handle receipt upload
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['receipt_file'])) {
-    $invoice_id = $_POST['invoice_id'];
-    $file = $_FILES['receipt_file'];
-    $allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+$success = $error = "";
+$invoices = [];
 
-    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (in_array($ext, $allowed)) {
-        $filename = 'receipt_' . time() . '_' . basename($file['name']);
-        $target = "../uploads/receipts/" . $filename;
+// ✅ Handle payment proof upload
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['invoice_id'])) {
+    $invoice_id = intval($_POST['invoice_id']);
+    if (!empty($_FILES['payment_proof']['name'])) {
+        $upload_dir = "../uploads/invoices/";
+        if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
 
-        if (move_uploaded_file($file['tmp_name'], $target)) {
-            try {
-                $stmt = $pdo->prepare("UPDATE invoices SET receipt_file = ?, status = 'paid' WHERE invoice_id = ? AND student_id = ?");
-                $stmt->execute([$filename, $invoice_id, $student_id]);
-                $success = "✅ Receipt uploaded and marked as paid.";
-            } catch (PDOException $e) {
-                $error = "❌ DB Error: " . $e->getMessage();
-            }
+        $ext = pathinfo($_FILES['payment_proof']['name'], PATHINFO_EXTENSION);
+        $filename = "proof_" . $student_id . "_" . time() . "." . $ext;
+        $target_path = $upload_dir . $filename;
+
+        if (move_uploaded_file($_FILES['payment_proof']['tmp_name'], $target_path)) {
+            $stmt = $pdo->prepare("UPDATE invoices SET payment_proof = ? WHERE invoice_id = ? AND student_id = ?");
+            $stmt->execute([$filename, $invoice_id, $student_id]);
+            $success = "✅ Payment proof uploaded successfully.";
         } else {
-            $error = "❌ Failed to move uploaded file.";
+            $error = "❌ Failed to upload file.";
         }
     } else {
-        $error = "❌ Only PDF, JPG, JPEG, PNG files are allowed.";
+        $error = "⚠️ Please select a file.";
     }
 }
 
-// Fetch invoices
-$invoices = [];
-try {
-    $stmt = $pdo->prepare("SELECT * FROM invoices WHERE student_id = ? ORDER BY issued_at DESC");
-    $stmt->execute([$student_id]);
-    $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error = "❌ Failed to load invoices: " . $e->getMessage();
+// ✅ Fetch invoices with purpose + university name
+if ($student_id) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT i.invoice_id, i.purpose, i.amount, i.status, i.due_date, i.issued_at,
+                   i.invoice_file, i.payment_proof,
+                   a.application_id, p.program_name, u.university_name
+            FROM invoices i
+            LEFT JOIN applications a ON i.application_id = a.application_id
+            LEFT JOIN programs p ON a.program_id = p.program_id
+            LEFT JOIN universities u ON p.university_id = u.university_id
+            WHERE i.student_id = ?
+            ORDER BY i.issued_at DESC
+        ");
+        $stmt->execute([$student_id]);
+        $invoices = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $error = "❌ Failed to fetch invoices: " . $e->getMessage();
+    }
+} else {
+    $error = "❌ Session issue: student ID missing.";
 }
 ?>
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Your Invoices</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #f2f6fc;
-            padding: 40px;
-        }
-        .container {
-            max-width: 960px;
-            margin: auto;
-            background: #ffffff;
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-        }
-        h2 {
-            color: #004c75;
-            margin-bottom: 25px;
-            text-align: center;
-        }
-        .msg {
-            padding: 10px 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-        .success { background: #d9fdd3; color: #267b00; }
-        .error { background: #ffe5e5; color: #cc0000; }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 30px;
-        }
-        th, td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #ccc;
-            text-align: center;
-        }
-        th {
-            background: #0077b6;
-            color: white;
-        }
-
-        input[type="file"], button {
-            padding: 7px 10px;
-            margin-top: 6px;
-        }
-
-        .upload-form {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .paid { color: green; font-weight: bold; }
-        .pending { color: orange; font-weight: bold; }
-
-        .back-link {
-            display: inline-block;
-            margin-top: 20px;
-            text-decoration: none;
-            color: #0077b6;
-            font-weight: bold;
-        }
-        .back-link:hover {
-            text-decoration: underline;
-        }
-
-        a.receipt-link {
-            color: #00509e;
-            text-decoration: none;
-        }
-        a.receipt-link:hover {
-            text-decoration: underline;
-        }
-
-    </style>
+  <meta charset="UTF-8">
+  <title>My Invoices</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
+    .container { max-width: 1150px; }
+    .card { border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
+    .status-paid { background: #d1fae5; color: #065f46; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; }
+    .status-unpaid { background: #fef3c7; color: #92400e; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; }
+    .status-pending { background: #e5e7eb; color: #374151; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; }
+  </style>
 </head>
 <body>
-<div class="container">
-    <h2>💼 Your Invoices</h2>
+<div class="container mt-5">
+  <h2 class="mb-3">💳 My Invoices</h2>
+  <a href="studentdashboard.php" class="btn btn-outline-secondary mb-4">🏠 Back to Dashboard</a>
 
-    <?php if ($success): ?>
-        <div class="msg success"><?= $success ?></div>
-    <?php elseif ($error): ?>
-        <div class="msg error"><?= $error ?></div>
-    <?php endif; ?>
+  <?php if ($success): ?>
+    <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
+  <?php elseif ($error): ?>
+    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
+  <?php endif; ?>
 
-    <?php if (empty($invoices)): ?>
-        <p>No invoices found.</p>
-    <?php else: ?>
-        <table>
+  <?php if (empty($invoices)): ?>
+    <div class="alert alert-warning">⚠️ No invoices found for you.</div>
+  <?php else: ?>
+    <div class="card p-4">
+      <div class="table-responsive">
+        <table class="table table-striped align-middle">
+          <thead class="table-dark">
             <tr>
-                <th>#</th>
-                <th>Amount (PKR)</th>
-                <th>Invoice Type</th>
-                <th>Status</th>
-                <th>Receipt</th>
-                <th>Upload Receipt</th>
+              <th>#</th>
+              <th>Purpose</th>
+              <th>Program</th>
+              <th>University</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Due Date</th>
+              <th>Issued On</th>
+              <th>Invoice File</th>
+              <th>Payment Proof</th>
+              <th>Upload Proof</th>
             </tr>
-            <?php foreach ($invoices as $index => $invoice): ?>
-                <tr>
-                    <td><?= $index + 1 ?></td>
-                    <td><?= number_format($invoice['amount']) ?></td>
-                    <td>
-                        <?php
-                        if ($invoice['type'] === 'application') echo "Application Approved";
-                        elseif ($invoice['type'] === 'visa') echo "Visa Approved";
-                        else echo "Local Course Enrollment";
-                        ?>
-                    </td>
-                    <td class="<?= $invoice['status'] ?>">
-                        <?= ucfirst($invoice['status']) ?>
-                    </td>
-                    <td>
-                        <?php if ($invoice['receipt_file']): ?>
-                            <a class="receipt-link" href="../uploads/receipts/<?= $invoice['receipt_file'] ?>" target="_blank">📄 View</a>
-                        <?php else: ?>
-                            -
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ($invoice['status'] !== 'paid'): ?>
-                            <form method="POST" enctype="multipart/form-data" class="upload-form">
-                                <input type="hidden" name="invoice_id" value="<?= $invoice['invoice_id'] ?>">
-                                <input type="file" name="receipt_file" accept=".pdf,.jpg,.jpeg,.png" required>
-                                <button type="submit">Upload</button>
-                            </form>
-                        <?php else: ?>
-                            ✅ Paid
-                        <?php endif; ?>
-                    </td>
-                </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($invoices as $invoice): ?>
+              <tr>
+                <td>#<?= htmlspecialchars($invoice['invoice_id']) ?></td>
+                <td><?= htmlspecialchars(ucfirst($invoice['purpose'] ?? 'N/A')) ?></td>
+                <td><?= htmlspecialchars($invoice['program_name'] ?? 'N/A') ?></td>
+                <td><?= htmlspecialchars($invoice['university_name'] ?? 'N/A') ?></td>
+                <td><strong>$<?= htmlspecialchars($invoice['amount']) ?></strong></td>
+                <td>
+                  <?php if (strtolower($invoice['status']) === 'paid'): ?>
+                    <span class="status-paid">Paid</span>
+                  <?php elseif (strtolower($invoice['status']) === 'unpaid'): ?>
+                    <span class="status-unpaid">Unpaid</span>
+                  <?php else: ?>
+                    <span class="status-pending"><?= htmlspecialchars($invoice['status']) ?></span>
+                  <?php endif; ?>
+                </td>
+                <td><?= $invoice['due_date'] ? htmlspecialchars($invoice['due_date']) : 'N/A' ?></td>
+                <td><?= htmlspecialchars($invoice['issued_at']) ?></td>
+                <td>
+                  <?php if (!empty($invoice['invoice_file'])): ?>
+                    <a href="../uploads/invoices/<?= htmlspecialchars($invoice['invoice_file']) ?>" target="_blank" class="btn btn-sm btn-primary">Download</a>
+                  <?php else: ?>
+                    <span class="text-muted">Not Uploaded</span>
+                  <?php endif; ?>
+                </td>
+                <td>
+                  <?php if (!empty($invoice['payment_proof'])): ?>
+                    <a href="../uploads/invoices/<?= htmlspecialchars($invoice['payment_proof']) ?>" target="_blank" class="btn btn-sm btn-success">View</a>
+                  <?php else: ?>
+                    <span class="text-danger">Not Uploaded</span>
+                  <?php endif; ?>
+                </td>
+                <td>
+                  <?php if (strtolower($invoice['status']) !== 'paid'): ?>
+                    <form method="post" enctype="multipart/form-data" class="d-flex">
+                      <input type="hidden" name="invoice_id" value="<?= $invoice['invoice_id'] ?>">
+                      <input type="file" name="payment_proof" class="form-control form-control-sm me-2" required>
+                      <button type="submit" class="btn btn-sm btn-secondary">Upload</button>
+                    </form>
+                  <?php else: ?>
+                    <span class="text-muted">✔ No Action Needed</span>
+                  <?php endif; ?>
+                </td>
+              </tr>
             <?php endforeach; ?>
+          </tbody>
         </table>
-    <?php endif; ?>
-
-    <a class="back-link" href="studentdashboard.php">← Back to Dashboard</a>
+      </div>
+    </div>
+  <?php endif; ?>
 </div>
 </body>
 </html>

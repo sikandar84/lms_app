@@ -35,6 +35,15 @@ if (isset($_GET['delete'])) {
 
 // 📋 Fetch all local courses
 $courses = $pdo->query("SELECT * FROM local_courses ORDER BY created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+
+// 📋 Fetch enrollments (students who chose courses)
+$enrollments = $pdo->query("
+    SELECT e.enrollment_id, e.enrolled_at, s.full_name AS student_name, s.email, lc.course_name, lc.course_duration
+    FROM local_course_enrollments e
+    JOIN users s ON e.student_id = s.user_id
+    JOIN local_courses lc ON e.local_course_id = lc.local_course_id
+    ORDER BY e.enrolled_at DESC
+")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -45,7 +54,7 @@ $courses = $pdo->query("SELECT * FROM local_courses ORDER BY created_at DESC")->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     body { background: #f8f9fa; }
-    .container { max-width: 900px; margin-top: 40px; }
+    .container { max-width: 1000px; margin-top: 40px; }
     .card { border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
   </style>
 </head>
@@ -84,7 +93,7 @@ $courses = $pdo->query("SELECT * FROM local_courses ORDER BY created_at DESC")->
   </div>
 
   <!-- 📋 Existing Courses -->
-  <div class="card p-4">
+  <div class="card p-4 mb-4">
     <h5>📚 Local Courses List</h5>
     <?php if (empty($courses)): ?>
       <p>No local courses added yet.</p>
@@ -115,6 +124,40 @@ $courses = $pdo->query("SELECT * FROM local_courses ORDER BY created_at DESC")->
       </table>
     <?php endif; ?>
   </div>
+
+  <!-- 👨‍🎓 Students Enrolled in Local Courses -->
+  <div class="card p-4">
+    <h5>👨‍🎓 Student Enrollments</h5>
+    <?php if (empty($enrollments)): ?>
+      <p>No student has enrolled in any local course yet.</p>
+    <?php else: ?>
+      <table class="table table-striped table-hover align-middle mt-3">
+        <thead class="table-light">
+          <tr>
+            <th>#</th>
+            <th>Student Name</th>
+            <th>Email</th>
+            <th>Course</th>
+            <th>Duration</th>
+            <th>Enrolled At</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($enrollments as $e): ?>
+            <tr>
+              <td><?= $e['enrollment_id'] ?></td>
+              <td><?= htmlspecialchars($e['student_name']) ?></td>
+              <td><?= htmlspecialchars($e['email']) ?></td>
+              <td><?= htmlspecialchars($e['course_name']) ?></td>
+              <td><?= htmlspecialchars($e['course_duration']) ?></td>
+              <td><?= $e['enrolled_at'] ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    <?php endif; ?>
+  </div>
+
 </div>
 </body>
 </html>
